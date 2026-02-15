@@ -1,20 +1,30 @@
-from typing import Annotated, Callable
+from typing import Annotated, Callable, Optional
 from agents import Runner, function_tool, Agent, WebSearchTool
 from dotenv import load_dotenv
 import os
+import asyncio
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+load_dotenv()
+
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+assert OPENAI_API_KEY is not None, "Missing API Key"
 
 @function_tool
-def test_tool(a: Annotated[str, "Test variable a"], bb: Annotated[str, "test var bbb"], ccc: int = 3) -> str:
+async def test_tool(a: Annotated[str, "Test variable a"], bb: Annotated[str, "test var bbb"], ccc: int = 3) -> str:
     """Test tool docstring"""
 
     return "hey"
 
-def main():
-    load_dotenv()
+app = FastAPI()
 
-    OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+class PromptBody(BaseModel):
+    text: str
+    session_id: Optional[str] = None
 
-    assert OPENAI_API_KEY is not None, "Missing API Key"
+@app.post("/prompt")
+async def post_prompt(prompt: PromptBody):
 
     print("Hello from ai-assistant!")
 
@@ -25,10 +35,8 @@ def main():
     )
     print(f"agent_func_schemas: { agent.tools }")
 
-    result = Runner.run_sync(agent, "Hi, please use the test tool, and find out who was the latest superbowl halftime show performer.")
+    result = await Runner.run(agent, prompt.text)
     print(f"Responses: { result.raw_responses }")
 
+    return {"response": result.final_output}
 
-
-if __name__ == "__main__":
-    main()
