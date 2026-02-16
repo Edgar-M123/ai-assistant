@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from datetime import date, datetime
+from datetime import datetime
 from enum import Enum
 from typing import Annotated, TypeVar
 from agents import Runner, function_tool, Agent, WebSearchTool
@@ -43,7 +43,7 @@ async def init_db():
         async with conn.cursor() as cur:
 
             print("Creating sessions table")
-            _ = await conn.execute("""
+            _ = await cur.execute("""
             CREATE TABLE IF NOT EXISTS public.sessions (
                 session_id VARCHAR,
                 role VARCHAR,
@@ -77,6 +77,8 @@ async def get_session(session_id: str) -> list[SessionRow]:
 
 async def save_session(session_row: SessionRow) -> None:
 
+    print("Saving session data")
+
     assert conn_string is not None, "Missing PG connection string"
     async with await psycopg.AsyncConnection.connect(conninfo=conn_string) as conn:
 
@@ -87,7 +89,7 @@ async def save_session(session_row: SessionRow) -> None:
             VALUES ( %s, %s, %s, %s );
             """, (session_row.session_id, session_row.role, session_row.content, session_row.created_at))
 
-        return
+        return None
 
 
 @function_tool
@@ -112,6 +114,7 @@ class PromptBody(BaseModel):
 @app.post("/prompt")
 async def post_prompt(prompt: PromptBody):
 
+
     print("Hello from ai-assistant!")
     latest_chat = SessionRow(
         session_id=prompt.session_id,
@@ -119,6 +122,7 @@ async def post_prompt(prompt: PromptBody):
         content=prompt.text,
         created_at=datetime.now()
     )
+    save_user_chat = asyncio.create_task(save_session(latest_chat))
 
     session_data = await get_session(prompt.session_id)
 
@@ -138,10 +142,11 @@ async def post_prompt(prompt: PromptBody):
         content=str(result.final_output),
         created_at=datetime.now()
     )
-    print(f"Responses: { result.raw_responses }")
+    save_ai_chat = asyncio.create_task(save_session(agent_chat))
 
-    await save_session(latest_chat)
-    await save_session(agent_chat)
+    await asyncio.wait([save_user_chat, save_ai_chat])
+
+    print(f"Responses: { result.raw_responses }")
 
     return {"response": result.final_output}
 
