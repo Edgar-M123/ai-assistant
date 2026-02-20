@@ -1,7 +1,7 @@
 from typing import Annotated
 from pydantic import BaseModel
 
-from services.db_service import SessionRow
+from project_types.db_types import SessionRow
 
 class AgentTestCase(BaseModel):
     id: Annotated[str, "test case ID"]
